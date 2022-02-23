@@ -2,13 +2,14 @@ clc
 clear
 close all
 
-load AllElectrodes.mat;
 load Electrodes.mat;
-load lowPass.mat;
 
 % configs
 
-ch = 37;
+plt_chs1 = [2, 7, 14, 23, 32, 41, 48, 53, 56, 55, 51, 45, 37, 28, 19, 11, 5];
+plt_chs2 = [1, 3, 8, 15, 24, 33, 42, 49, 54, 55, 51, 45, 37, 28, 19, 11, 5];
+
+ch = 55;
 fc = 40;
 w_filter = 1.5;
 order = 2;
@@ -21,7 +22,6 @@ PlotRefreshRate = 15;
 
 ServerPort = 12220;
 ClientPort = 12221;
-
 
 HeaderNumber = length(HeaderIndex); 
 BufferLength = PlotLength*Fs;
@@ -85,7 +85,9 @@ while(ByteCount)
     catch
         ByteCount = 1;
     end
-    
+    if numel(Header)<length(HeaderIndex)
+        continue
+    end
     Header(9) = [];
     Data(:, 9) = [];
     Header(18) = [];
@@ -112,7 +114,6 @@ while(ByteCount)
             %%% Plotting initialization (2) %%%               
 
             topo_mat = zeros(9);
-            
             topo_mat(1, [4,6]) = y(end, 1:2);
             topo_mat(2, 3:7) = y(end, 3:7);
             topo_mat(3, [1:2, 4:6, 8:9]) = y(end, 8:14);
@@ -152,7 +153,25 @@ while(ByteCount)
             plt_fft = plot(f, P1);
             plt_fft.XDataSource = 'f';
             plt_fft.YDataSource = 'P1';
-            
+ 
+            figure
+            hold on
+            plts_ch1_wave = [];
+            for i = 1:length(plt_chs1)
+                ch_no = plt_chs1(i);
+                plts_ch1_wave = [plts_ch1_wave, plot(t, (i-1)*100+y(:, ch_no))];
+            end
+            hold off
+
+            figure
+            hold on
+            plts_ch2_wave = [];
+            for i = 1:length(plt_chs2)
+                ch_no = plt_chs2(i);
+                plts_ch2_wave = [plts_ch2_wave, plot(t, (i-1)*100+y(:, ch_no))];
+            end
+            hold off
+
             JustStarted = false;
         end
         
@@ -162,7 +181,6 @@ while(ByteCount)
         % Plotting in time domain
         y = BufferData;
         t = (1:1:length(data_ch))/Fs+time;
-        
         data_ch = y(:,ch);
         refreshdata(plt,'caller');
 
@@ -173,12 +191,11 @@ while(ByteCount)
         P1 = P2(1:L/2+1);
         P1(2:end-1) = 2*P1(2:end-1);
         refreshdata(plt_fft,'caller');
-        
-        % Plotting wave
 
+        % Plotting wave
+        y_wave = filter(b, a, y);
+        y_wave = cos(angle(hilbert(y_wave)));
         for i = size(Data, 1):-5:1
-            y_wave = filter(b, a, y);
-            y_wave = cos(angle(hilbert(y_wave)));
             sample_no = BufferLength-i; 
             topo_mat(1, [4,6]) = y_wave(sample_no, 1:2);
             topo_mat(2, 3:7) = y_wave(sample_no, 3:7);
@@ -191,7 +208,17 @@ while(ByteCount)
             topo_mat(9, 4:6) = y_wave(sample_no, 54:56);
             set(plt_wave, 'CData', topo_mat);
         end
-
+        
+        for i = 1:length(plts_ch1_wave)
+            set(plts_ch1_wave(i), 'XData', t);
+            set(plts_ch1_wave(i), 'YData', (i-1)*100+y(:,plt_chs1(i)));
+        end
+        
+        for i = 1:length(plts_ch2_wave)
+            set(plts_ch2_wave(i), 'XData', t);
+            set(plts_ch2_wave(i), 'YData', (i-1)*100+y(:,plt_chs2(i)));
+        end
+        
         % Plotting power
         PSD = abs(data_fft).^2;
         PSD = PSD(1:L/2+1, :)/(Fs*L);
